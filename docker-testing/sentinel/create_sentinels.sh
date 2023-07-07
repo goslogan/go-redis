@@ -17,7 +17,7 @@ logfile /redis.log
 EOF
 
   set -x
-  redis-server /nodes/${PORT}/redis.conf
+  redis-sentinel /nodes/${PORT}/sentinel.conf
   sleep 1
   if [ $? -ne 0 ]; then
     echo "Sentinel failed to start, exiting."
@@ -32,25 +32,25 @@ function start_redis () {
   local REPLICA=$2
 
   mkdir -p /nodes/${PORT}
-  if [[ -e /redis.conf ]]; then
-    cp /redis.conf /nodes/$PORT/redis.conf
-  else
-    touch /nodes/$PORT/redis.conf
-  fi
 
   cat << EOF >> /nodes/${PORT}/redis.conf
 port ${PORT}
-cluster-enabled yes
-  daemonize yes
+daemonize yes
 logfile /redis.log
 dir /nodes/${PORT}
+loadmodule /opt/redis-stack/lib/redisbloom.so
+loadmodule /opt/redis-stack/lib/redisearch.so
+loadmodule /opt/redis-stack/lib/redistimeseries.so
+loadmodule /opt/redis-stack/lib/rejson.so
 EOF
 
-if [ ! -z "${REPLICA}" ]; do 
-  cat << EOFR >> /nodes/${PORT}/redis.conf
+  if [ ! -z "${REPLICA}" ]; then
+    cat << EOFR >> /nodes/${PORT}/redis.conf
 replicaof 127.0.0.1 ${REPLICA}
-EOF
-
+EOFR
+  fi
+  
+  cat /nodes/${PORT}/redis.conf
   set -x
   redis-server /nodes/${PORT}/redis.conf
   sleep 1
@@ -64,14 +64,28 @@ EOF
 mkdir -p /nodes
 touch /nodes/nodemap
 
+START_PORT=$1
+
 if [ -z ${START_PORT} ]; then
     START_PORT=26379
 fi
 echo "STARTING: ${START_PORT}"
-start_redis(${START_PORT})
-start_redis($((${START_PORT}+1)), $START_PORT)
-start_redis($((${START_PORT}+2)), $START_PORT)
+start_redis ${START_PORT}
 
+echo "FIRST REPLICA"
+start_redis $((${START_PORT}+1)) $START_PORT
 
+echo "SECOND REPLICA"
+start_redis $((${START_PORT}+2)) $START_PORT
 
+echo "FIRST SENTINEL"
+start_sentinel ${START_PORT} $((${START_PORT}+11))
+
+echo "SECOND SENTINEL"
+start_sentinel ${START_PORT} $((${START_PORT}+12))
+
+echo "SECOND SENTINEL"
+start_sentinel ${START_PORT} $((${START_PORT}+13))
+
+ 
 tail -f /redis.log

@@ -51,7 +51,11 @@ services:
       - all
 
   redis72-sentinel:     
-    image: redis/redis-stack-server:7.2.0-RC2
+    build:
+      context: .
+      dockerfile: Dockerfile.sentinel
+      args:
+        PORT: ${REDIS_72_SENTINEL_MASTER_PORT}
     ports:
      - ${REDIS_72_SENTINEL_MASTER_PORT}:${REDIS_72_SENTINEL_MASTER_PORT}
      - ${REDIS_72_SENTINEL_REPLICA_1_PORT}:${REDIS_72_SENTINEL_REPLICA_1_PORT}
@@ -59,14 +63,6 @@ services:
      - ${REDIS_72_SENTINEL_1_PORT}:${REDIS_72_SENTINEL_1_PORT}
      - ${REDIS_72_SENTINEL_2_PORT}:${REDIS_72_SENTINEL_2_PORT}
      - ${REDIS_72_SENTINEL_3_PORT}:${REDIS_72_SENTINEL_3_PORT}
-    environment:
-      - START_PORT=${REDIS_72_SENTINEL_MASTER_PORT}
-    entrypoint: 
-      - /create_sentinels.sh
-    volumes:
-      - './redis/redis72.conf:/redis.conf'      
-      - './sentinel/sentinel.conf:sentinel.conf'
-      - './sentinel/create_sentinels.sh:/create_sentinels.sh'
     profiles:
       - redis72
       - sentinel
