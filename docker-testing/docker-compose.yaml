@@ -50,12 +50,53 @@ services:
       - standalone
       - all
 
+  redis62-sentinel:     
+    build:
+      context: .
+      dockerfile: Dockerfile.62.sentinel
+    entrypoint: 
+      - /create_sentinels.sh
+      - ${REDIS_62_SENTINEL_MASTER_PORT}
+    ports:
+     - ${REDIS_62_SENTINEL_MASTER_PORT}:${REDIS_62_SENTINEL_MASTER_PORT}
+     - ${REDIS_62_SENTINEL_REPLICA_1_PORT}:${REDIS_62_SENTINEL_REPLICA_1_PORT}
+     - ${REDIS_62_SENTINEL_REPLICA_2_PORT}:${REDIS_62_SENTINEL_REPLICA_2_PORT}
+     - ${REDIS_62_SENTINEL_1_PORT}:${REDIS_62_SENTINEL_1_PORT}
+     - ${REDIS_62_SENTINEL_2_PORT}:${REDIS_62_SENTINEL_2_PORT}
+     - ${REDIS_62_SENTINEL_3_PORT}:${REDIS_62_SENTINEL_3_PORT}
+    profiles:
+      - redis62
+      - sentinel
+      - all
+
+  redis70-sentinel:     
+    build:
+      context: .
+      dockerfile: Dockerfile.70.sentinel
+    entrypoint: 
+      - /create_sentinels.sh
+      - ${REDIS_72_SENTINEL_MASTER_PORT}
+      - yes
+    ports:
+     - ${REDIS_70_SENTINEL_MASTER_PORT}:${REDIS_70_SENTINEL_MASTER_PORT}
+     - ${REDIS_70_SENTINEL_REPLICA_1_PORT}:${REDIS_70_SENTINEL_REPLICA_1_PORT}
+     - ${REDIS_70_SENTINEL_REPLICA_2_PORT}:${REDIS_70_SENTINEL_REPLICA_2_PORT}
+     - ${REDIS_70_SENTINEL_1_PORT}:${REDIS_70_SENTINEL_1_PORT}
+     - ${REDIS_70_SENTINEL_2_PORT}:${REDIS_70_SENTINEL_2_PORT}
+     - ${REDIS_70_SENTINEL_3_PORT}:${REDIS_70_SENTINEL_3_PORT}
+    profiles:
+      - redis70
+      - sentinel
+      - all
+
   redis72-sentinel:     
     build:
       context: .
-      dockerfile: Dockerfile.sentinel
-      args:
-        PORT: ${REDIS_72_SENTINEL_MASTER_PORT}
+      dockerfile: Dockerfile.72.sentinel
+    entrypoint: 
+      - /create_sentinels.sh
+      - ${REDIS_72_SENTINEL_MASTER_PORT}
+      - yes
     ports:
      - ${REDIS_72_SENTINEL_MASTER_PORT}:${REDIS_72_SENTINEL_MASTER_PORT}
      - ${REDIS_72_SENTINEL_REPLICA_1_PORT}:${REDIS_72_SENTINEL_REPLICA_1_PORT}
