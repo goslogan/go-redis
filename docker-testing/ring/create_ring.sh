@@ -7,7 +7,6 @@ function start_redis () {
 
   cat << EOF >> /nodes/${PORT}/redis.conf
 port ${PORT}
-cluster-enabled yes
 daemonize yes
 logfile /redis.log
 dir /nodes/${PORT}
@@ -43,12 +42,11 @@ if [ -z ${START_PORT} ]; then
     START_PORT=9379
 fi
 
-END_PORT=$(( ${START_PORT} + 5 ))
+END_PORT=$(( ${START_PORT} + 2 ))
 
 for (( PORT = ${START_PORT}; PORT <= ${END_PORT}; PORT++ )) 
 do  
   start_redis ${PORT}
 done
 
-echo yes | redis-cli --cluster create `seq -f 127.0.0.1:%g ${START_PORT} ${END_PORT}` --cluster-replicas 1
 tail -f /redis.log

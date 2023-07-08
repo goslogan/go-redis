@@ -167,3 +167,51 @@ services:
       - redis62
       - cluster
       - all
+
+  redis62-ring:     
+    build:
+      context: .
+      dockerfile: Dockerfile.62.ring
+    entrypoint: 
+      - /create_ring.sh
+      - ${REDIS_62_RING_PORT_1}
+    ports:
+     - ${REDIS_62_RING_PORT_1}:${REDIS_62_RING_PORT_1}
+     - ${REDIS_62_RING_PORT_2}:${REDIS_62_RING_PORT_2}
+     - ${REDIS_62_RING_PORT_3}:${REDIS_62_RING_PORT_3}
+    profiles:
+      - redis62
+      - ring
+      - all
+
+  redis70-ring:     
+    build:
+      context: .
+      dockerfile: Dockerfile.70.ring
+    entrypoint: 
+      - /create_ring.sh
+      - ${REDIS_70_RING_PORT_1}
+    ports:
+     - ${REDIS_70_RING_PORT_1}:${REDIS_70_RING_PORT_1}
+     - ${REDIS_70_RING_PORT_2}:${REDIS_70_RING_PORT_2}
+     - ${REDIS_70_RING_PORT_3}:${REDIS_70_RING_PORT_3}
+    profiles:
+      - redis70
+      - ring
+      - all
+
+  redis72-ring:     
+    build:
+      context: .
+      dockerfile: Dockerfile.72.ring
+    entrypoint: 
+      - /create_ring.sh
+      - ${REDIS_72_RING_PORT_1}
+    ports:
+     - ${REDIS_72_RING_PORT_1}:${REDIS_72_RING_PORT_1}
+     - ${REDIS_72_RING_PORT_2}:${REDIS_72_RING_PORT_2}
+     - ${REDIS_72_RING_PORT_3}:${REDIS_72_RING_PORT_3}
+    profiles:
+      - redis72
+      - ring
+      - all

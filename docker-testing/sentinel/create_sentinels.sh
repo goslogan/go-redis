@@ -82,25 +82,14 @@ START_PORT=$1
 ENABLE_DEBUG=$2
 
 if [ -z ${START_PORT} ]; then
-    START_PORT=26379
+    START_PORT=9379
 fi
-echo "STARTING: ${START_PORT}"
+
 start_redis ${START_PORT}
-
-echo "FIRST REPLICA"
 start_redis $((${START_PORT}+1)) $START_PORT
-
-echo "SECOND REPLICA"
 start_redis $((${START_PORT}+2)) $START_PORT
-
-echo "FIRST SENTINEL"
 start_sentinel ${START_PORT} $((${START_PORT}+11))
-
-echo "SECOND SENTINEL"
 start_sentinel ${START_PORT} $((${START_PORT}+12))
-
-echo "THIRD SENTINEL"
 start_sentinel ${START_PORT} $((${START_PORT}+13))
 
- 
 tail -f /redis.log
