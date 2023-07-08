@@ -43,7 +43,7 @@ if [ -z ${START_PORT} ]; then
     START_PORT=26379
 fi
 
-END_PORT = (( ${START_PORT} + 5 ))
+END_PORT=$(( ${START_PORT} + 5 ))
 
 for (( PORT = ${START_PORT}; PORT <= ${END_PORT} + 6; PORT++ )) 
 do  

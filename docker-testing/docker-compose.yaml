@@ -114,8 +114,8 @@ services:
       context: .
       dockerfile: Dockerfile.72.cluster
     entrypoint: 
-      - /create_sentinels.sh
-      - ${REDIS_72_SENTINEL_MASTER_PORT}
+      - /create_cluster.sh
+      - ${REDIS_72_CLUSTER_PORT_1}
       - yes
     ports:
      - ${REDIS_72_CLUSTER_PORT_1}:${REDIS_72_CLUSTER_PORT_1}
@@ -134,8 +134,8 @@ services:
       context: .
       dockerfile: Dockerfile.70.cluster
     entrypoint: 
-      - /create_sentinels.sh
-      - ${REDIS_70_SENTINEL_MASTER_PORT}
+      - /create_cluster.sh
+      - ${REDIS_70_CLUSTER_PORT_1}
       - yes
     ports:
      - ${REDIS_70_CLUSTER_PORT_1}:${REDIS_70_CLUSTER_PORT_1}
@@ -154,9 +154,8 @@ services:
       context: .
       dockerfile: Dockerfile.62.cluster
     entrypoint: 
-      - /create_sentinels.sh
-      - ${REDIS_62_SENTINEL_MASTER_PORT}
-      - yes
+      - /create_cluster.sh
+      - ${REDIS_62_CLUSTER_PORT_1}
     ports:
      - ${REDIS_62_CLUSTER_PORT_1}:${REDIS_62_CLUSTER_PORT_1}
      - ${REDIS_62_CLUSTER_PORT_2}:${REDIS_62_CLUSTER_PORT_2}
