@@ -1,0 +1,7 @@
+FROM redis/redis-stack-server:6.2.6-v7
+
+COPY cluster/create_cluster.sh /create_cluster.sh
+
+RUN chmod a+x /create_cluster.sh
+
+ENTRYPOINT [ "/create_cluster.sh"]
