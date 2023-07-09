@@ -9,7 +9,7 @@ function start_redis () {
 port ${PORT}
 cluster-enabled yes
 daemonize yes
-logfile /redis.log
+logfile /nodes/${PORT}/redis.log
 dir /nodes/${PORT}
 pidfile /nodes/${PORT}/redis.pid
 protected-mode no
@@ -51,4 +51,4 @@ do
 done
 
 echo yes | redis-cli --cluster create `seq -f 127.0.0.1:%g ${START_PORT} ${END_PORT}` --cluster-replicas 1
-tail -f /redis.log
+tail -f /nodes/*/redis.log

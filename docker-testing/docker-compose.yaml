@@ -13,8 +13,6 @@ services:
       - --protected-mode no
       - --enable-module-command yes
       - --enable-debug-command yes
-    volumes:
-      - './redis/redis72.conf:/redis.conf'      
     profiles:
       - redis72
       - standalone
@@ -29,8 +27,6 @@ services:
       - --protected-mode no
       - --enable-module-command yes
       - --enable-debug-command yes
-    volumes:
-      - './redis/redis70.conf:/redis.conf'      
     profiles:
       - redis70
       - standalone
@@ -43,8 +39,6 @@ services:
     entrypoint:
       - /opt/redis-stack/bin/redis-stack-server
       - --protected-mode no
-    volumes:
-      - './redis/redis62.conf:/redis.conf'      
     profiles:
       - redis62
       - standalone

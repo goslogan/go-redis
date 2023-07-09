@@ -8,7 +8,7 @@ function start_redis () {
   cat << EOF >> /nodes/${PORT}/redis.conf
 port ${PORT}
 daemonize yes
-logfile /redis.log
+logfile /nodes/${PORT}/redis.log
 dir /nodes/${PORT}
 pidfile /nodes/${PORT}/redis.pid
 protected-mode no
@@ -49,4 +49,4 @@ do
   start_redis ${PORT}
 done
 
-tail -f /redis.log
+tail -f /nodes/*/redis.log
