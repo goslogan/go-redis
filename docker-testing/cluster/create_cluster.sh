@@ -5,7 +5,7 @@ function start_redis () {
 
   mkdir -p /nodes/${PORT}
 
-  cat << EOF >> /nodes/${PORT}/redis.conf
+  cat << EOF > /nodes/${PORT}/redis.conf
 port ${PORT}
 cluster-enabled yes
 daemonize yes

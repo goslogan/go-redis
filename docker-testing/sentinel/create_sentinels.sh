@@ -7,7 +7,7 @@ function start_sentinel () {
 
   mkdir -p /nodes/$PORT
 
-  cat << EOF >> /nodes/${PORT}/sentinel.conf
+  cat << EOF > /nodes/${PORT}/sentinel.conf
 port ${PORT}
 daemonize yes
 sentinel monitor go-redis-test 127.0.0.1 ${REDIS_PORT} 2
@@ -41,7 +41,7 @@ function start_redis () {
 
   mkdir -p /nodes/${PORT}
 
-  cat << EOF >> /nodes/${PORT}/redis.conf
+  cat << EOF > /nodes/${PORT}/redis.conf
 port ${PORT}
 daemonize yes
 logfile /nodes/${PORT}/redis.log
