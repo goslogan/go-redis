@@ -1,12 +1,10 @@
 // query provides an interface to RedisSearch's query functionality.
-package grstack
+package redis
 
 import (
 	"fmt"
 	"math"
 	"time"
-
-	"github.com/goslogan/grstack/internal"
 )
 
 type QueryOptions struct {
@@ -104,17 +102,17 @@ func (q *QueryOptions) serialize() []interface{} {
 	}
 
 	if q.Slop != noSlop {
-		args = internal.AppendStringArg(args, "slop", fmt.Sprintf("%d", q.Slop))
+		args = appendStringArg(args, "slop", fmt.Sprintf("%d", q.Slop))
 	}
 
 	if q.Timeout != 0 {
-		args = internal.AppendStringArg(args, "timeout", fmt.Sprintf("%d", q.Timeout.Milliseconds()))
+		args = appendStringArg(args, "timeout", fmt.Sprintf("%d", q.Timeout.Milliseconds()))
 	}
 	args = q.appendFlagArg(args, q.InOrder, "inorder")
-	args = internal.AppendStringArg(args, "language", q.Language)
+	args = appendStringArg(args, "language", q.Language)
 
-	args = append(args, internal.SerializeCountedArgs("inkeys", false, q.InKeys)...)
-	args = append(args, internal.SerializeCountedArgs("infields", false, q.InFields)...)
+	args = append(args, serializeCountedArgs("inkeys", false, q.InKeys)...)
+	args = append(args, serializeCountedArgs("infields", false, q.InFields)...)
 
 	args = q.appendFlagArg(args, q.ExplainScore && q.WithScores, "EXPLAINSCORE")
 
@@ -291,7 +289,7 @@ func NewQueryHighlight() *QueryHighlight {
 // serialize prepares the summarisation to be passed to Redis.
 func (s *QuerySummarize) serialize() []interface{} {
 	args := []interface{}{"summarize"}
-	args = append(args, internal.SerializeCountedArgs("fields", false, s.Fields)...)
+	args = append(args, serializeCountedArgs("fields", false, s.Fields)...)
 	args = append(args, "frags", s.Frags)
 	args = append(args, "len", s.Len)
 	args = append(args, "separator", s.Separator)
@@ -308,7 +306,7 @@ type QueryHighlight struct {
 // serialize prepares the highlighting to be passed to Redis.
 func (h *QueryHighlight) serialize() []interface{} {
 	args := []interface{}{"HIGHLIGHT"}
-	args = append(args, internal.SerializeCountedArgs("fields", false, h.Fields)...)
+	args = append(args, serializeCountedArgs("fields", false, h.Fields)...)
 	if h.OpenTag != "" || h.CloseTag != "" {
 		args = append(args, "tags", h.OpenTag, h.CloseTag)
 	}
@@ -328,4 +326,36 @@ type GeoFilter struct {
 
 func (gf *GeoFilter) serialize() []interface{} {
 	return []interface{}{"geofilter", gf.Attribute, gf.Long, gf.Lat, gf.Radius, gf.Units}
+}
+
+/******************************************************************************
+* Internal
+******************************************************************************/
+
+// serializeCountedArgs is used to serialize a string array to
+// NAME <count> values. If incZero is true then NAME 0 will be generated
+// otherwise empty results will not be generated.
+func serializeCountedArgs(name string, incZero bool, args []string) []interface{} {
+	if len(args) > 0 || incZero {
+		result := make([]interface{}, 2+len(args))
+
+		result[0] = name
+		result[1] = len(args)
+		for pos, val := range args {
+			result[pos+2] = val
+		}
+
+		return result
+	} else {
+		return nil
+	}
+}
+
+// appendStringArg appends the name and value if value is not empty
+func appendStringArg(args []interface{}, name, value string) []interface{} {
+	if value != "" {
+		return append(args, name, value)
+	} else {
+		return args
+	}
 }

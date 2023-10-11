@@ -1,11 +1,9 @@
-package grstack
+package redis
 
 // code to process the decoding/parsing of individual values in the query results.
 
 import (
 	"encoding/json"
-
-	"github.com/redis/go-redis/v9"
 )
 
 type QueryResults []*QueryResult
@@ -43,7 +41,7 @@ func (r *HashQueryValue) parse(input []interface{}) error {
 }
 
 func (r *HashQueryValue) Scan(dst interface{}) error {
-	sCmd := redis.NewMapStringStringResult(r.Value, nil)
+	sCmd := NewMapStringStringResult(r.Value, nil)
 	return sCmd.Scan(dst)
 }
 

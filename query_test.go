@@ -1,11 +1,11 @@
-package grstack_test
+package redis_test
 
 import (
 	"math"
 
-	grstack "github.com/goslogan/grstack"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/redis/go-redis/v9"
 )
 
 // ft.search accounts "@tam:nic\.gibson"
@@ -31,11 +31,11 @@ var _ = Describe("Query basics", Label("hash", "query", "ft.search"), func() {
 
 	It("can return a map result", func() {
 		Expect(client.FTSearch(ctx, "hcustomers", `@id:{1121175}`, nil).Val()).To(Equal(
-			grstack.QueryResults{&grstack.QueryResult{
+			redis.QueryResults{&redis.QueryResult{
 				Key:         "haccount:1121175",
 				Score:       0,
 				Explanation: nil,
-				Values: &grstack.HashQueryValue{
+				Values: &redis.HashQueryValue{
 					Value: map[string]string{
 						"account_owner": "lara.croft",
 						"balance":       "927.00",
@@ -61,13 +61,13 @@ var _ = Describe("Query basics", Label("hash", "query", "ft.search"), func() {
 var _ = Describe("Query options", Label("hash", "query", "ft.search"), func() {
 
 	It("will return empty results - NOCONTENT", func() {
-		opts := grstack.NewQueryOptions()
+		opts := redis.NewQueryOptions()
 		opts.NoContent = true
 		cmd := client.FTSearch(ctx, "hcustomers", `@id:{1121175}`, opts)
 		Expect(cmd.Val().Key("haccount:1121175")).NotTo(BeNil())
-		Expect(cmd.Val().Key("haccount:1121175")).To(BeAssignableToTypeOf(&grstack.QueryResult{}))
+		Expect(cmd.Val().Key("haccount:1121175")).To(BeAssignableToTypeOf(&redis.QueryResult{}))
 		Expect(cmd.Val().Key("haccount:1121175")).To(Equal(
-			&grstack.QueryResult{
+			&redis.QueryResult{
 				Key:         "haccount:1121175",
 				Score:       0,
 				Explanation: nil,
@@ -76,22 +76,22 @@ var _ = Describe("Query options", Label("hash", "query", "ft.search"), func() {
 	})
 
 	It("will return scores - WITHSCORES", func() {
-		opts := grstack.NewQueryOptions()
+		opts := redis.NewQueryOptions()
 		opts.WithScores = true
 		cmd := client.FTSearch(ctx, "hcustomers", `@id:{1121175}`, opts)
 		Expect(cmd.Err()).NotTo(HaveOccurred())
-		Expect(cmd.Val()).To(BeAssignableToTypeOf(grstack.QueryResults{}))
+		Expect(cmd.Val()).To(BeAssignableToTypeOf(redis.QueryResults{}))
 		Expect(cmd.Val().Key("haccount:1121175").Score).Should(BeNumerically(">=", 1))
 	})
 
 	It("will return filtered results - FILTER (numeric)", func() {
-		opts := grstack.NewQueryOptions()
+		opts := redis.NewQueryOptions()
 		opts.NoContent = true
-		opts.Filters = []grstack.QueryFilter{
+		opts.Filters = []redis.QueryFilter{
 			{
 				Attribute: "balance",
-				Min:       grstack.FilterValue(0, true),
-				Max:       grstack.FilterValue(math.Inf(1), false),
+				Min:       redis.FilterValue(0, true),
+				Max:       redis.FilterValue(math.Inf(1), false),
 			},
 		}
 		cmd := client.FTSearch(ctx, "hcustomers", `@owner:{lara\.croft}`, opts)
@@ -100,7 +100,7 @@ var _ = Describe("Query options", Label("hash", "query", "ft.search"), func() {
 	})
 
 	It("can explain a score", func() {
-		opts := grstack.NewQueryOptions()
+		opts := redis.NewQueryOptions()
 		opts.WithScores = true
 		opts.ExplainScore = true
 		cmd := client.FTSearch(ctx, "hcustomers", `@owner:{lara\.croft}`, opts)
@@ -111,7 +111,7 @@ var _ = Describe("Query options", Label("hash", "query", "ft.search"), func() {
 
 	It("can sort results", Label("sort"), func() {
 		results := []string{}
-		opts := grstack.NewQueryOptions()
+		opts := redis.NewQueryOptions()
 		opts.NoContent = true
 		opts.SortBy = "customer"
 		cmd := client.FTSearch(ctx, "hcustomers", `@owner:{lara\.croft}`, opts)
@@ -125,9 +125,9 @@ var _ = Describe("Query options", Label("hash", "query", "ft.search"), func() {
 
 	It("can limit to the first n results", Label("limit"), func() {
 		results := []string{}
-		opts := grstack.NewQueryOptions()
+		opts := redis.NewQueryOptions()
 		opts.NoContent = true
-		opts.Limit = &grstack.Limit{Num: 3, Offset: 0}
+		opts.Limit = &redis.Limit{Num: 3, Offset: 0}
 		opts.SortBy = "customer"
 		cmd := client.FTSearch(ctx, "hcustomers", `@owner:{lara\.croft}`, opts)
 		Expect(cmd.Err()).NotTo(HaveOccurred())
@@ -141,9 +141,9 @@ var _ = Describe("Query options", Label("hash", "query", "ft.search"), func() {
 
 	It("can return n results from an offset", Label("limit"), func() {
 		results := []string{}
-		opts := grstack.NewQueryOptions()
+		opts := redis.NewQueryOptions()
 		opts.NoContent = true
-		opts.Limit = &grstack.Limit{Num: 3, Offset: 3}
+		opts.Limit = &redis.Limit{Num: 3, Offset: 3}
 		opts.SortBy = "customer"
 		cmd := client.FTSearch(ctx, "hcustomers", `@owner:{lara\.croft}`, opts)
 		Expect(cmd.Err()).NotTo(HaveOccurred())
@@ -155,19 +155,19 @@ var _ = Describe("Query options", Label("hash", "query", "ft.search"), func() {
 	})
 
 	It("can handle the RETURN subcommand", func() {
-		opts := grstack.NewQueryOptions()
-		opts.Return = append(opts.Return, grstack.QueryReturn{
+		opts := redis.NewQueryOptions()
+		opts.Return = append(opts.Return, redis.QueryReturn{
 			Name: "owner",
 		})
-		opts.Return = append(opts.Return, grstack.QueryReturn{Name: "balance"})
+		opts.Return = append(opts.Return, redis.QueryReturn{Name: "balance"})
 		cmd := client.FTSearch(ctx, "hcustomers", `@owner:{ellen\.ripley}`, opts)
 		Expect(cmd.Err()).NotTo(HaveOccurred())
-		Expect(cmd.Val()).To(Equal(grstack.QueryResults{
-			&grstack.QueryResult{
+		Expect(cmd.Val()).To(Equal(redis.QueryResults{
+			&redis.QueryResult{
 				Key:         "haccount:536299",
 				Score:       0,
 				Explanation: nil,
-				Values: &grstack.HashQueryValue{
+				Values: &redis.HashQueryValue{
 
 					Value: map[string]string{"owner": "ellen.ripley", "balance": "113"},
 				}}}))
@@ -191,11 +191,11 @@ var _ = Describe("JSON query basics", Label("json", "query", "ft.search"), func(
 var _ = Describe("JSON searches", Label("json", "query", "ft.search"), func() {
 
 	It("will return valid results", func() {
-		opts := grstack.NewQueryOptions()
+		opts := redis.NewQueryOptions()
 		cmd := client.FTSearchJSON(ctx, "jcustomers", `@id:{1121175}`, opts)
 		Expect(cmd.Err()).NotTo(HaveOccurred())
 		Expect(cmd.Val().Key("jaccount:1121175")).NotTo(BeNil())
-		Expect(cmd.Val().Key("jaccount:1121175").Values).To(BeAssignableToTypeOf(&grstack.JSONQueryValue{}))
+		Expect(cmd.Val().Key("jaccount:1121175").Values).To(BeAssignableToTypeOf(&redis.JSONQueryValue{}))
 	})
 
 	It("can return multiple search results", func() {
@@ -204,7 +204,7 @@ var _ = Describe("JSON searches", Label("json", "query", "ft.search"), func() {
 		Expect(cmd.Err()).NotTo(HaveOccurred())
 		Expect(cmd.Val().Key("jcomplex1")).NotTo(BeNil())
 		Expect(cmd.Val().Key("jcomplex2")).NotTo(BeNil())
-		Expect(cmd.Val().Key("jcomplex2").Values.(*grstack.JSONQueryValue).Value).To(Equal(map[string]interface{}{
+		Expect(cmd.Val().Key("jcomplex2").Values.(*redis.JSONQueryValue).Value).To(Equal(map[string]interface{}{
 			"$": map[string]interface{}{
 				"data": float64(1),
 				"test": map[string]interface{}{
@@ -212,7 +212,7 @@ var _ = Describe("JSON searches", Label("json", "query", "ft.search"), func() {
 				},
 			}},
 		))
-		Expect(cmd.Val().Key("jcomplex1").Values.(*grstack.JSONQueryValue).Value).To(Equal(map[string]interface{}{
+		Expect(cmd.Val().Key("jcomplex1").Values.(*redis.JSONQueryValue).Value).To(Equal(map[string]interface{}{
 			"$": map[string]interface{}{
 
 				"data": float64(1),
@@ -228,13 +228,13 @@ var _ = Describe("JSON searches", Label("json", "query", "ft.search"), func() {
 
 	It("can handle multiple search results with DIALECT 3", func() {
 
-		options := grstack.NewQueryOptions()
+		options := redis.NewQueryOptions()
 		options.Dialect = 3
 		cmd := client.FTSearchJSON(ctx, "jsoncomplex", `@datum:[1 1]`, options)
 		Expect(cmd.Err()).NotTo(HaveOccurred())
 		Expect(cmd.Val().Key("jcomplex1")).NotTo(BeNil())
 		Expect(cmd.Val().Key("jcomplex2")).NotTo(BeNil())
-		Expect(cmd.Val().Key("jcomplex2").Values.(*grstack.JSONQueryValue).Value).To(Equal(map[string]interface{}{
+		Expect(cmd.Val().Key("jcomplex2").Values.(*redis.JSONQueryValue).Value).To(Equal(map[string]interface{}{
 			"$": []interface{}{map[string]interface{}{
 				"data": float64(1),
 				"test": map[string]interface{}{
@@ -242,7 +242,7 @@ var _ = Describe("JSON searches", Label("json", "query", "ft.search"), func() {
 				},
 			}},
 		}))
-		Expect(cmd.Val().Key("jcomplex1").Values.(*grstack.JSONQueryValue).Value).To(Equal(map[string]interface{}{
+		Expect(cmd.Val().Key("jcomplex1").Values.(*redis.JSONQueryValue).Value).To(Equal(map[string]interface{}{
 			"$": []interface{}{map[string]interface{}{
 				"data": float64(1),
 				"test1": map[string]interface{}{
@@ -257,8 +257,8 @@ var _ = Describe("JSON searches", Label("json", "query", "ft.search"), func() {
 
 	It("can return values when we use RETURN", func() {
 
-		options := grstack.NewQueryOptions()
-		options.Return = append(options.Return, grstack.QueryReturn{
+		options := redis.NewQueryOptions()
+		options.Return = append(options.Return, redis.QueryReturn{
 			Name: "$..data",
 			As:   "answer",
 		})
@@ -266,14 +266,14 @@ var _ = Describe("JSON searches", Label("json", "query", "ft.search"), func() {
 		Expect(cmd.Err()).NotTo(HaveOccurred())
 		Expect(cmd.Val().Key("jcomplex1")).NotTo(BeNil())
 		Expect(cmd.Val().Key("jcomplex2")).NotTo(BeNil())
-		Expect(cmd.Val().Key("jcomplex2").Values.(*grstack.JSONQueryValue).Value).To(Equal(map[string]interface{}{"answer": float64(1)}))
-		Expect(cmd.Val().Key("jcomplex1").Values.(*grstack.JSONQueryValue).Value).To(Equal(map[string]interface{}{"answer": float64(1)}))
+		Expect(cmd.Val().Key("jcomplex2").Values.(*redis.JSONQueryValue).Value).To(Equal(map[string]interface{}{"answer": float64(1)}))
+		Expect(cmd.Val().Key("jcomplex1").Values.(*redis.JSONQueryValue).Value).To(Equal(map[string]interface{}{"answer": float64(1)}))
 	})
 
 	It("can return values when we use RETURN and DIALECT v3", func() {
 
-		options := grstack.NewQueryOptions()
-		options.Return = append(options.Return, grstack.QueryReturn{
+		options := redis.NewQueryOptions()
+		options.Return = append(options.Return, redis.QueryReturn{
 			Name: "$..data",
 			As:   "answer",
 		})
@@ -282,8 +282,8 @@ var _ = Describe("JSON searches", Label("json", "query", "ft.search"), func() {
 		Expect(cmd.Err()).NotTo(HaveOccurred())
 		Expect(cmd.Val().Key("jcomplex1")).NotTo(BeNil())
 		Expect(cmd.Val().Key("jcomplex2")).NotTo(BeNil())
-		Expect(cmd.Val().Key("jcomplex1").Values.(*grstack.JSONQueryValue).Value).To(Equal(map[string]interface{}{"answer": []interface{}{float64(1), float64(2), float64(1)}}))
-		Expect(cmd.Val().Key("jcomplex2").Values.(*grstack.JSONQueryValue).Value).To(Equal(map[string]interface{}{"answer": []interface{}{float64(1), float64(1)}}))
+		Expect(cmd.Val().Key("jcomplex1").Values.(*redis.JSONQueryValue).Value).To(Equal(map[string]interface{}{"answer": []interface{}{float64(1), float64(2), float64(1)}}))
+		Expect(cmd.Val().Key("jcomplex2").Values.(*redis.JSONQueryValue).Value).To(Equal(map[string]interface{}{"answer": []interface{}{float64(1), float64(1)}}))
 	})
 
 	It("can scan a result", func() {
@@ -299,10 +299,10 @@ var _ = Describe("JSON searches", Label("json", "query", "ft.search"), func() {
 
 		var customer = Customer{}
 
-		cmd := client.FTSearchJSON(ctx, "jcustomers", `@owner:{ellen\.ripley}`, grstack.NewQueryOptions())
+		cmd := client.FTSearchJSON(ctx, "jcustomers", `@owner:{ellen\.ripley}`, redis.NewQueryOptions())
 		Expect(cmd.Err()).NotTo(HaveOccurred())
 		Expect(cmd.Val().Key("jaccount:536299")).NotTo(BeNil())
-		Expect(cmd.Val().Key("jaccount:536299").Values.(*grstack.JSONQueryValue).Scan("$", &customer)).NotTo(HaveOccurred())
+		Expect(cmd.Val().Key("jaccount:536299").Values.(*redis.JSONQueryValue).Scan("$", &customer)).NotTo(HaveOccurred())
 		Expect(customer.Customer).To(Equal("Davon Audley"))
 		Expect(customer.Email).To(Equal(`daudley3\@alexa\.com`))
 	})

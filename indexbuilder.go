@@ -1,4 +1,4 @@
-package grstack
+package redis
 
 type IndexBuilder struct {
 	opts IndexOptions

@@ -1,10 +1,8 @@
-package grstack
+package redis
 
 import (
 	"fmt"
 	"time"
-
-	"github.com/goslogan/grstack/internal"
 )
 
 // AggregateOptions represents the options that can be passed to [FT.AGGREGATE].
@@ -85,7 +83,7 @@ func (a *AggregateOptions) serialize() []interface{} {
 		args = append(args, "verbatim")
 	}
 	if a.Timeout != 0 {
-		args = internal.AppendStringArg(args, "timeout", fmt.Sprintf("%d", a.Timeout.Milliseconds()))
+		args = appendStringArg(args, "timeout", fmt.Sprintf("%d", a.Timeout.Milliseconds()))
 	}
 	args = append(args, a.serializeLoad()...)
 

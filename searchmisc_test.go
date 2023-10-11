@@ -1,21 +1,20 @@
-package grstack_test
+package redis_test
 
 import (
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	"github.com/goslogan/grstack"
+	"github.com/redis/go-redis/v9"
 )
 
 var _ = Describe("We can build query options", Label("aggregate", "search", "ft.aggregate"), func() {
 
 	It("can execute a very simple aggregate", func() {
-		opts := grstack.NewAggregateBuilder().
-			GroupBy(grstack.NewGroupByBuilder().
+		opts := redis.NewAggregateBuilder().
+			GroupBy(redis.NewGroupByBuilder().
 				Property("@owner").
-				Reduce(grstack.ReduceSum("@balance", "total_balance")).
+				Reduce(redis.ReduceSum("@balance", "total_balance")).
 				GroupBy())
 
 		cmd := client.FTAggregate(ctx, "hcustomers", "*", opts.Options())

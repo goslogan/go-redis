@@ -1,24 +1,24 @@
-package grstack_test
+package redis_test
 
 import (
 	"time"
 
-	"github.com/goslogan/grstack"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/redis/go-redis/v9"
 )
 
 var _ = Describe("We can build query options", Label("builders", "ft.search"), func() {
 
 	It("can construct default query options", func() {
-		base := grstack.NewQueryOptions()
-		built := grstack.NewQueryBuilder()
+		base := redis.NewQueryOptions()
+		built := redis.NewQueryBuilder()
 
 		Expect(base).To(Equal(built.Options()))
 	})
 
 	It("can construct options with simple flags set", func() {
-		base := grstack.NewQueryOptions()
+		base := redis.NewQueryOptions()
 		base.Dialect = 2
 		base.ExplainScore = true
 		base.NoContent = true
@@ -26,7 +26,7 @@ var _ = Describe("We can build query options", Label("builders", "ft.search"), f
 		base.NoStopWords = true
 		base.Verbatim = true
 
-		built := grstack.NewQueryBuilder().
+		built := redis.NewQueryBuilder().
 			Dialect(2).
 			ExplainScore().
 			NoContent().
@@ -39,13 +39,13 @@ var _ = Describe("We can build query options", Label("builders", "ft.search"), f
 	})
 
 	It("can construct queries with parameters", func() {
-		base := grstack.NewQueryOptions()
+		base := redis.NewQueryOptions()
 		base.Params = map[string]interface{}{
 			"foo": "one",
 			"bar": 2,
 		}
 
-		built := grstack.NewQueryBuilder().
+		built := redis.NewQueryBuilder().
 			Param("foo", "one").
 			Param("bar", 2)
 
@@ -53,8 +53,8 @@ var _ = Describe("We can build query options", Label("builders", "ft.search"), f
 	})
 
 	It("can construct queries with geofilters", func() {
-		base := grstack.NewQueryOptions()
-		base.GeoFilters = []grstack.GeoFilter{
+		base := redis.NewQueryOptions()
+		base.GeoFilters = []redis.GeoFilter{
 			{
 				Attribute: "test",
 				Long:      100,
@@ -63,22 +63,22 @@ var _ = Describe("We can build query options", Label("builders", "ft.search"), f
 				Units:     "m",
 			},
 		}
-		built := grstack.NewQueryBuilder().
+		built := redis.NewQueryBuilder().
 			GeoFilter("test", 100, 200, 300, "m")
 
 		Expect(base).To(Equal(built.Options()))
 	})
 
 	It("can construct queries with filters", func() {
-		base := grstack.NewQueryOptions()
-		base.Filters = []grstack.QueryFilter{
+		base := redis.NewQueryOptions()
+		base.Filters = []redis.QueryFilter{
 			{
 				Attribute: "test",
 				Min:       -100,
 				Max:       "+inf",
 			},
 		}
-		built := grstack.NewQueryBuilder().
+		built := redis.NewQueryBuilder().
 			Filter("test", -100, "+inf")
 
 		Expect(base).To(Equal(built.Options()))
@@ -89,20 +89,20 @@ var _ = Describe("We can build query options", Label("builders", "ft.search"), f
 var _ = Describe("We can build aggregate options", Label("builders", "ft.aggregate"), func() {
 
 	It("can construct default query options", func() {
-		base := grstack.NewAggregateOptions()
-		built := grstack.NewAggregateBuilder()
+		base := redis.NewAggregateOptions()
+		built := redis.NewAggregateBuilder()
 
 		Expect(base).To(Equal(built.Options()))
 	})
 
 	It("can construct options with simple flags set", func() {
-		base := grstack.NewAggregateOptions()
+		base := redis.NewAggregateOptions()
 		base.Dialect = 2
-		base.Steps = append(base.Steps, grstack.AggregateFilter("@test != 3"))
+		base.Steps = append(base.Steps, redis.AggregateFilter("@test != 3"))
 		base.Timeout = time.Duration(1000)
 		base.Verbatim = true
 
-		built := grstack.NewAggregateBuilder().
+		built := redis.NewAggregateBuilder().
 			Dialect(2).
 			Timeout(time.Duration(1000)).
 			Verbatim().
@@ -113,13 +113,13 @@ var _ = Describe("We can build aggregate options", Label("builders", "ft.aggrega
 	})
 
 	It("can construct queries with parameters", func() {
-		base := grstack.NewAggregateOptions()
+		base := redis.NewAggregateOptions()
 		base.Params = map[string]interface{}{
 			"foo": "one",
 			"bar": 2,
 		}
 
-		built := grstack.NewAggregateBuilder().
+		built := redis.NewAggregateBuilder().
 			Param("foo", "one").
 			Param("bar", 2)
 
@@ -127,10 +127,10 @@ var _ = Describe("We can build aggregate options", Label("builders", "ft.aggrega
 	})
 
 	It("can construct a single group by", func() {
-		base := grstack.NewAggregateOptions()
-		base.Steps = append(base.Steps, &grstack.AggregateGroupBy{
+		base := redis.NewAggregateOptions()
+		base.Steps = append(base.Steps, &redis.AggregateGroupBy{
 			Properties: []string{"@name"},
-			Reducers: []grstack.AggregateReducer{
+			Reducers: []redis.AggregateReducer{
 				{
 					Name: "count",
 					As:   "nameCount",
@@ -138,45 +138,45 @@ var _ = Describe("We can build aggregate options", Label("builders", "ft.aggrega
 			},
 		})
 
-		built := grstack.NewAggregateBuilder().
-			GroupBy(grstack.NewGroupByBuilder().
+		built := redis.NewAggregateBuilder().
+			GroupBy(redis.NewGroupByBuilder().
 				Properties([]string{"@name"}).
-				Reduce(grstack.ReduceCount("nameCount")).
+				Reduce(redis.ReduceCount("nameCount")).
 				GroupBy())
 
 		Expect(base).To(Equal(built.Options()))
 	})
 
 	It("can build a complex aggregate", func() {
-		base := grstack.NewAggregateOptions()
-		base.Steps = append(base.Steps, &grstack.AggregateApply{
+		base := redis.NewAggregateOptions()
+		base.Steps = append(base.Steps, &redis.AggregateApply{
 			Expression: "@timestamp - (@timestamp % 86400)",
 			As:         "day",
 		})
-		base.Steps = append(base.Steps, &grstack.AggregateGroupBy{
+		base.Steps = append(base.Steps, &redis.AggregateGroupBy{
 			Properties: []string{"@day", "@country"},
-			Reducers: []grstack.AggregateReducer{{
+			Reducers: []redis.AggregateReducer{{
 				Name: "count",
 				As:   "num_visits",
 			}}})
 
-		base.Steps = append(base.Steps, &grstack.AggregateSort{
-			Keys: []grstack.AggregateSortKey{{
+		base.Steps = append(base.Steps, &redis.AggregateSort{
+			Keys: []redis.AggregateSortKey{{
 				Name:  "@day",
-				Order: grstack.SortAsc,
+				Order: redis.SortAsc,
 			}, {
 				Name:  "@country",
-				Order: grstack.SortDesc,
+				Order: redis.SortDesc,
 			}},
 		})
 
-		built := grstack.NewAggregateBuilder().
+		built := redis.NewAggregateBuilder().
 			Apply("@timestamp - (@timestamp % 86400)", "day").
-			GroupBy(grstack.NewGroupByBuilder().
+			GroupBy(redis.NewGroupByBuilder().
 				Properties([]string{"@day", "@country"}).
-				Reduce(grstack.ReduceCount("num_visits")).
+				Reduce(redis.ReduceCount("num_visits")).
 				GroupBy()).
-			SortBy([]grstack.AggregateSortKey{{Name: "@day", Order: grstack.SortAsc}, {Name: "@country", Order: grstack.SortDesc}})
+			SortBy([]redis.AggregateSortKey{{Name: "@day", Order: redis.SortAsc}, {Name: "@country", Order: redis.SortDesc}})
 
 		Expect(base).To(Equal(built.Options()))
 
