@@ -1,18 +1,36 @@
-// redis main module - defines the client class
 package redis
 
 import (
 	"context"
+	"fmt"
+	"strings"
+	"time"
+)
 
-	"github.com/redis/go-redis/v9/internal/proto"
+const (
+	noSlop                   = -100 // impossible value for slop to indicate none set
+	DefaultOffset            = 0    // default first value for return offset
+	DefaultLimit             = 10   // default number of results to return
+	noLimit                  = 0
+	defaultSumarizeSeparator = "..."
+	defaultSummarizeLen      = 20
+	defaultSummarizeFrags    = 3
+	GeoMiles                 = "mi"
+	GeoFeet                  = "f"
+	GeoKilimetres            = "km"
+	GeoMetres                = "m"
+	SortAsc                  = "ASC"
+	SortDesc                 = "DESC"
+	SortNone                 = "" // SortNone is used to indicate that no sorting is required if you want be explicit
+	defaultDialect           = 2
 )
 
 type SearchCmdAble interface {
-	FTSearch(ctx context.Context, index string, query string, options *QueryOptions) *QueryCmd
-	FTAggregate(ctx context.Context, index string, query string, options *AggregateOptions) *QueryCmd
+	//FTSearch(ctx context.Context, index string, query string, options *QueryOptions) *QueryCmd
+	//FTAggregate(ctx context.Context, index string, query string, options *AggregateOptions) *QueryCmd
 	FTDropIndex(ctx context.Context, index string, dropDocuments bool) *BoolCmd
 	FTCreateIndex(ctx context.Context, index string)
-	FTConfigGet(ctx context.Context, keys ...string) *FTConfigGetCmd
+	//FTConfigGet(ctx context.Context, keys ...string) *FTConfigGetCmd
 	FTConfigSet(ctx context.Context, name, value string) *BoolCmd
 	FTTagVals(ctx context.Context, index, tag string) *StringSliceCmd
 	FTList(ctx context.Context) *StringSliceCmd
@@ -21,7 +39,7 @@ type SearchCmdAble interface {
 	FTDictDel(ctx context.Context, dictionary string, terms ...string) *IntCmd
 	FTDictDump(ctx context.Context, dictionary string) *StringSliceCmd
 	FTSynUpdate(ctx context.Context, index string, group string, terms ...string) *BoolCmd
-	FTSynDump(ctx context.Context, index string) *SynonymDumpCmd
+	//FTSynDump(ctx context.Context, index string) *SynonymDumpCmd
 	FTAliasAdd(ctx context.Context, alias, index string) *BoolCmd
 	FTAliasDel(ctx context.Context, alias string) *BoolCmd
 	FTAliasUpdate(ctx context.Context, alias, index string) *BoolCmd
@@ -29,340 +47,582 @@ type SearchCmdAble interface {
 
 //------------------------------------------------------------------------------
 
-type QueryCmd struct {
-	baseCmd
-	val     QueryResults
-	options *QueryOptions
-	process cmdable // used to initialise iterator
-	count   int64   // contains the total number of results if the query was successful
+// FTCreate creates a new index.
+func (c cmdable) FTCreate(ctx context.Context, index string, options *IndexOptions) *BoolCmd {
+	args := []interface{}{"FT.CREATE", index}
+	args = append(args, options.serialize()...)
+	cmd := NewBoolCmd(ctx, args...)
+	_ = c(ctx, cmd)
+	return cmd
 }
 
-// NewQueryCmd returns an initialised query command.
-func NewQueryCmd(ctx context.Context, process cmdable, args ...interface{}) *QueryCmd {
-	return &QueryCmd{
-		baseCmd: baseCmd{
-			ctx:  ctx,
-			args: args,
-		},
+// FTDropIndex removes an index, optionally dropping documents in the index.
+func (c cmdable) FTDropIndex(ctx context.Context, index string, dropDocuments bool) *BoolCmd {
+	args := []interface{}{"FT.DROPINDEX", index}
+	if dropDocuments {
+		args = append(args, "DD")
+	}
+	cmd := NewBoolCmd(ctx, args...)
+	_ = c(ctx, cmd)
+	return cmd
+}
+
+//------------------------------------------------------------------------------
+
+// SearchIndex defines an index to be created with FT.CREATE
+// For more information, see [https://redis.io/commands/ft.create/]
+type IndexOptions struct {
+	On              string   // JSON or HASH
+	Prefix          []string // Array of key prefixes
+	Filter          string
+	Language        string
+	LanguageField   string
+	Score           float64
+	ScoreField      string
+	MaxTextFields   bool
+	NoOffsets       bool
+	Temporary       uint64 // If this is a temporary index, number of seconds until expiry
+	NoHighlight     bool
+	NoFields        bool
+	NoFreqs         bool
+	StopWords       []string
+	UseStopWords    bool
+	SkipInitialscan bool
+	Schema          []SchemaAttribute
+}
+
+// TagAttribute defines a tag attribute for search index creation
+type TagAttribute struct {
+	Name           string
+	Alias          string
+	Sortable       bool
+	UnNormalized   bool
+	Separator      string
+	CaseSensitive  bool
+	WithSuffixTrie bool
+	NoIndex        bool
+}
+
+type TextAttribute struct {
+	Name           string
+	Alias          string
+	Sortable       bool
+	UnNormalized   bool
+	Phonetic       string
+	Weight         float32
+	NoStem         bool
+	WithSuffixTrie bool
+	NoIndex        bool
+}
+
+type NumericAttribute struct {
+	Name     string
+	Alias    string
+	Sortable bool
+	NoIndex  bool
+}
+
+type GeoAttribute struct {
+	Name     string
+	Alias    string
+	Sortable bool
+	NoIndex  bool
+}
+
+type VectorAttribute struct {
+	Name           string
+	Alias          string
+	Algorithm      string
+	Type           string
+	Dim            uint64
+	DistanceMetric string
+	InitialCap     uint64
+	BlockSize      uint64
+	M              uint64
+	EFConstruction uint64
+	EFRuntime      uint64
+	Epsilon        float64
+}
+
+type GeometryAttribute struct {
+	Name  string
+	Alias string
+}
+
+type SchemaAttribute interface {
+	serialize() []interface{}
+	// parse(key string, value interface{})
+}
+
+// NewIndexOptions returns an initialised IndexOptions struct with defaults set
+func NewIndexOptions() *IndexOptions {
+	return &IndexOptions{
+		On:    "hash", // Default
+		Score: 1,      // Default
 	}
 }
 
-func (cmd *QueryCmd) SetVal(val QueryResults) {
-	cmd.val = val
+func NewQueryOptions() *QueryOptions {
+	return &QueryOptions{
+		Limit:     NewQueryLimit(DefaultOffset, DefaultLimit),
+		Slop:      noSlop,
+		SortOrder: SortAsc,
+		Dialect:   defaultDialect,
+		Params:    map[string]interface{}{},
+	}
 }
 
-func (cmd *QueryCmd) Val() QueryResults {
-	return cmd.val
+func NewQueryLimit(first int, num int) *QueryLimit {
+	return &QueryLimit{Offset: first, Num: num}
 }
 
-func (cmd *QueryCmd) Result() (QueryResults, error) {
-	return cmd.Val(), cmd.Err()
+func NewQuerySummarize() *QuerySummarize {
+	return &QuerySummarize{}
 }
 
-func (cmd *QueryCmd) Len() int {
-	if cmd.Err() != nil {
-		return 0
+func NewQueryHighlight() *QueryHighlight {
+	return &QueryHighlight{}
+}
+
+//------------------------------------------------------------------------------
+
+func (i *IndexOptions) serialize() []interface{} {
+
+	args := []interface{}{"ON", strings.ToUpper(i.On)}
+	args = append(args, serializeCountedArgs("PREFIX", false, i.Prefix)...)
+
+	if i.Filter != "" {
+		args = append(args, "FILTER", i.Filter)
+	}
+
+	if i.Language != "" {
+		args = append(args, "LANGUAGE", i.Language)
+	}
+
+	if i.LanguageField != "" {
+		args = append(args, "LANGUAGE_FIELD", i.LanguageField)
+	}
+
+	args = append(args, "SCORE", i.Score)
+
+	if i.ScoreField != "" {
+		args = append(args, "SCORE_FIELD", i.ScoreField)
+	}
+
+	if i.MaxTextFields {
+		args = append(args, "MAXTEXTFIELDS")
+	}
+
+	if i.NoOffsets {
+		args = append(args, "NOOFFSETS")
+	}
+
+	if i.Temporary > 0 {
+		args = append(args, "TEMPORARY", i.Temporary)
+	}
+
+	if i.NoHighlight && !i.NoOffsets {
+		args = append(args, "NOHL")
+	}
+
+	if i.NoFields {
+		args = append(args, "NOFIELDS")
+	}
+
+	if i.NoFreqs {
+		args = append(args, "NOFREQS")
+	}
+
+	if i.UseStopWords {
+		args = append(args, serializeCountedArgs("STOPWORDS", true, i.StopWords)...)
+	}
+
+	if i.SkipInitialscan {
+		args = append(args, "SKIPINITIALSCAN")
+	}
+
+	schema := []interface{}{"SCHEMA"}
+
+	for _, attrib := range i.Schema {
+		schema = append(schema, attrib.serialize()...)
+	}
+
+	return append(args, schema...)
+}
+
+func (a *NumericAttribute) serialize() []interface{} {
+
+	attribs := []interface{}{a.Name}
+	if a.Alias != "" {
+		attribs = append(attribs, "AS", a.Alias)
+	}
+	attribs = append(attribs, "NUMERIC")
+
+	if a.Sortable {
+		attribs = append(attribs, "SORTABLE")
+	}
+
+	if a.NoIndex {
+		attribs = append(attribs, "NOINDEX")
+	}
+
+	return attribs
+}
+
+func (a *TagAttribute) serialize() []interface{} {
+
+	attribs := []interface{}{a.Name}
+	if a.Alias != "" {
+		attribs = append(attribs, "AS", a.Alias)
+	}
+	attribs = append(attribs, "TAG")
+
+	if a.Separator != "" {
+		attribs = append(attribs, "SEPARATOR", a.Separator)
+	}
+
+	if a.Sortable {
+		attribs = append(attribs, "SORTABLE")
+		if a.UnNormalized {
+			attribs = append(attribs, "UNF")
+		}
+	}
+
+	if a.CaseSensitive {
+		attribs = append(attribs, "CASESENSITIVE")
+	}
+	if a.NoIndex {
+		attribs = append(attribs, "NOINDEX")
+	}
+
+	return attribs
+}
+
+func (a *TextAttribute) serialize() []interface{} {
+
+	attribs := []interface{}{a.Name}
+	if a.Alias != "" {
+		attribs = append(attribs, "AS", a.Alias)
+	}
+
+	attribs = append(attribs, "TEXT")
+
+	if a.Weight != 0 {
+		attribs = append(attribs, "WEIGHT", a.Weight)
+	}
+
+	if a.Sortable {
+		attribs = append(attribs, "SORTABLE")
+		if a.UnNormalized {
+			attribs = append(attribs, "UNF")
+		}
+	}
+	if a.Phonetic != "" {
+		attribs = append(attribs, "PHONETIC", a.Phonetic)
+	}
+	if a.NoStem {
+		attribs = append(attribs, "NOSTEM")
+	}
+
+	if a.NoIndex {
+		attribs = append(attribs, "NOINDEX")
+	}
+
+	return attribs
+}
+
+func (a *GeometryAttribute) serialize() []interface{} {
+	attribs := []interface{}{a.Name}
+	if a.Alias != "" {
+		attribs = append(attribs, "AS", a.Alias)
+	}
+	attribs = append(attribs, "GEOMETRY")
+
+	return attribs
+}
+
+func (a *GeoAttribute) serialize() []interface{} {
+	attribs := []interface{}{a.Name}
+	if a.Alias != "" {
+		attribs = append(attribs, "AS", a.Alias)
+	}
+
+	attribs = append(attribs, "GEO")
+
+	if a.Sortable {
+		attribs = append(attribs, "SORTABLE")
+	}
+
+	if a.NoIndex {
+		attribs = append(attribs, "NOINDEX")
+	}
+	return attribs
+}
+
+func (a *VectorAttribute) serialize() []interface{} {
+	attribs := []interface{}{a.Name}
+	if a.Alias != "" {
+		attribs = append(attribs, "AS", a.Alias)
+	}
+
+	attribs = append(attribs, "VECTOR")
+	attribs = append(attribs, a.Algorithm)
+
+	params := []interface{}{"TYPE", a.Type, "DIM", a.Dim, "DISTANCE_METRIC", a.DistanceMetric}
+	if a.InitialCap != 0 {
+		params = append(params, "INITIAL_CAP", a.InitialCap)
+	}
+	if strings.ToLower(a.Algorithm) == "FLAT" && a.BlockSize != 0 {
+		params = append(params, "BLOCK_SIZE", a.BlockSize)
+	}
+	if strings.ToLower(a.Algorithm) == "HNSW" {
+		if a.M != 0 {
+			params = append(params, "M", a.M)
+		}
+		if a.EFConstruction != 0 {
+			params = append(params, "EF_CONSTRUCTION", a.EFConstruction)
+		}
+		if a.EFRuntime != 0 {
+			params = append(params, "EF_RUNTIME", a.EFRuntime)
+		}
+		if a.Epsilon != 0 {
+			params = append(params, "EPSILON", a.Epsilon)
+		}
+	}
+	attribs = append(attribs, len(params))
+	attribs = append(attribs, params...)
+
+	return attribs
+}
+
+//------------------------------------------------------------------------------
+
+type QueryOptions struct {
+	NoContent    bool
+	Verbatim     bool
+	NoStopWords  bool
+	WithScores   bool
+	WithPayloads bool
+	WithSortKeys bool
+	InOrder      bool
+	ExplainScore bool
+	Limit        *QueryLimit
+	Return       []QueryReturn
+	Filters      []QueryFilter
+	InKeys       []string
+	InFields     []string
+	Language     string
+	Slop         int8
+	Expander     string
+	Scorer       string
+	SortBy       string
+	SortOrder    string
+	Dialect      uint8
+	Timeout      time.Duration
+	Summarize    *QuerySummarize
+	HighLight    *QueryHighlight
+	GeoFilters   []GeoFilter
+	Params       map[string]interface{}
+	json         bool
+}
+
+type QuerySummarize struct {
+	Fields    []string
+	Frags     int32
+	Len       int32
+	Separator string
+}
+
+type QueryHighlight struct {
+	Fields   []string
+	OpenTag  string
+	CloseTag string
+}
+
+type QueryReturn struct {
+	Name string
+	As   string
+}
+
+type QueryFilter struct {
+	Attribute string
+	Min       interface{} // either a numeric value or +inf, -inf or "(" followed by numeric
+	Max       interface{} // as above
+}
+
+// queryLimit defines the results by offset and number.
+type QueryLimit struct {
+	Offset int
+	Num    int
+}
+
+// serialize converts a query struct to a slice of  interface{}
+// ready for execution against Redis
+func (q *QueryOptions) serialize() []interface{} {
+	var args = []interface{}{}
+
+	args = q.appendFlagArg(args, q.NoContent, "NOCONTENT")
+	args = q.appendFlagArg(args, q.Verbatim, "VERBATIM")
+	args = q.appendFlagArg(args, q.NoStopWords, "NOSTOPWORDS")
+	args = q.appendFlagArg(args, q.WithScores, "WITHSCORES")
+	args = q.appendFlagArg(args, q.WithPayloads, "WITHPAYLOADS")
+	args = q.appendFlagArg(args, q.WithSortKeys, "WITHSORTKEYS")
+	args = append(args, q.serializeFilters()...)
+	for _, gf := range q.GeoFilters {
+		args = append(args, gf.serialize()...)
+	}
+	args = append(args, q.serializeReturn()...)
+	if q.Summarize != nil {
+		args = append(args, q.Summarize.serialize()...)
+	}
+	if q.HighLight != nil {
+		args = append(args, q.HighLight.serialize()...)
+	}
+
+	if q.Slop != noSlop {
+		args = appendStringArg(args, "SLOP", fmt.Sprintf("%d", q.Slop))
+	}
+
+	if q.Timeout != 0 {
+		args = appendStringArg(args, "TIMEOUT", fmt.Sprintf("%d", q.Timeout.Milliseconds()))
+	}
+	args = q.appendFlagArg(args, q.InOrder, "INORDER")
+	args = appendStringArg(args, "LANGUAGE", q.Language)
+
+	args = append(args, serializeCountedArgs("INKEYS", false, q.InKeys)...)
+	args = append(args, serializeCountedArgs("INFIELDS", false, q.InFields)...)
+
+	args = q.appendFlagArg(args, q.ExplainScore && q.WithScores, "EXPLAINSCORE")
+
+	if q.SortBy != "" {
+		args = append(args, "SORTBY", q.SortBy)
+		if q.SortOrder != "" {
+			args = append(args, q.SortOrder)
+		}
+	}
+
+	if q.Limit != nil {
+		args = append(args, q.Limit.serialize()...)
+	}
+
+	if len(q.Params) != 0 {
+		args = append(args, "PARAMS", len(q.Params))
+		for n, v := range q.Params {
+			args = append(args, n, v)
+		}
+	}
+
+	if q.Dialect != defaultDialect {
+		args = append(args, "DIALECT", q.Dialect)
+	}
+
+	return args
+}
+
+// appendFlagArg appends the values to args if flag is true. args is returned
+func (q *QueryOptions) appendFlagArg(args []interface{}, flag bool, value string) []interface{} {
+	if flag {
+		return append(args, value)
 	} else {
-		return len(cmd.val)
+		return args
 	}
 }
 
-func (cmd *QueryCmd) String() string {
-	return cmdString(cmd, cmd.val)
-}
-
-func (cmd *QueryCmd) SetCount(count int64) {
-	cmd.count = count
-}
-
-// Count returns the total number of results from a successful query.
-func (cmd *QueryCmd) Count() int64 {
-	return cmd.count
-}
-
-// Iterator returns an iterator for the search.
-func (cmd *QueryCmd) Iterator(ctx context.Context) *SearchIterator {
-	return NewSearchIterator(ctx, cmd, cmd.process)
-}
-
-func (cmd *QueryCmd) readReply(rd *proto.Reader) error {
-	rawResults, err := rd.ReadSlice()
-
-	if err != nil {
-		return err
+// appendStringArg appends the name and value if value is not empty
+func appendStringArg(args []interface{}, name, value string) []interface{} {
+	if value != "" {
+		return append(args, name, value)
+	} else {
+		return args
 	}
+}
 
-	resultSize := cmd.options.resultSize()
-	resultCount := rawResults[0].(int64)
-	results := make([]*QueryResult, 0)
-
-	for i := 1; i < len(rawResults); i += resultSize {
-		j := 0
-		var score float64 = 0
-		var explanation []interface{}
-
-		key := rawResults[i+j].(string)
-		j++
-
-		if cmd.options.WithScores {
-			if cmd.options.ExplainScore {
-				scoreData := rawResults[i+j].([]interface{})
-				score = scoreData[0].(float64)
-				explanation = scoreData[1].([]interface{})
-
+func (q *QueryOptions) serializeReturn() []interface{} {
+	if len(q.Return) > 0 {
+		fields := []interface{}{}
+		for _, ret := range q.Return {
+			if ret.As == "" {
+				fields = append(fields, ret.Name)
 			} else {
-				score, _ = rawResults[i+j].(float64)
-			}
-			j++
-		}
-
-		result := QueryResult{
-			Key:         key,
-			Score:       score,
-			Explanation: explanation,
-			Values:      nil,
-		}
-
-		if !cmd.options.NoContent {
-
-			if cmd.options.json {
-				result.Values = &JSONQueryValue{}
-			} else {
-				result.Values = &HashQueryValue{}
-			}
-
-			if err := result.Values.parse(rawResults[i+j].([]interface{})); err != nil {
-				return err
+				fields = append(fields, ret.Name, "as", ret.As)
 			}
 		}
-
-		results = append(results, &result)
-		j++
-
-	}
-
-	cmd.SetCount(resultCount)
-	cmd.SetVal(QueryResults(results))
-	return nil
-}
-
-/*******************************************************************************
- ***** FTConfigGetCmd 													  ******
- *******************************************************************************/
-
-type FTConfigGetCmd struct {
-	baseCmd
-	val map[string]string
-}
-
-func NewFTConfigGetCmd(ctx context.Context, args ...interface{}) *FTConfigGetCmd {
-	return &FTConfigGetCmd{
-		baseCmd: baseCmd{
-			ctx:  ctx,
-			args: args,
-		},
-	}
-}
-
-func (cmd *FTConfigGetCmd) readReply(rd *proto.Reader) error {
-
-}
-
-func (c *FTConfigGetCmd) postProcess() error {
-	if result, err := c.Slice(); err == nil {
-		configs := make(map[string]string, len(result))
-		for _, cfg := range result {
-			key := cfg.([]interface{})[0].(string)
-			if key[0] != '_' {
-				if cfg.([]interface{})[1] != nil {
-					val := cfg.([]interface{})[1].(string)
-					configs[key] = val
-				} else {
-					configs[key] = ""
-				}
-			}
-
-		}
-		c.SetVal(configs)
-	}
-	return nil
-}
-
-func (cmd *FTConfigGetCmd) SetVal(val map[string]string) {
-	cmd.val = val
-}
-
-func (cmd *FTConfigGetCmd) Val() map[string]string {
-	return cmd.val
-}
-
-func (cmd *FTConfigGetCmd) Result() (map[string]string, error) {
-	return cmd.Val(), cmd.Err()
-}
-
-/*******************************************************************************
-*
-* SynDumpCmd
-*
-*******************************************************************************/
-
-type SynonymDumpCmd struct {
-	*Cmd
-	val map[string][]string
-}
-
-var _ Cmder = (*SynonymDumpCmd)(nil)
-
-func NewSynonymDumpCmd(ctx context.Context, args ...interface{}) *SynonymDumpCmd {
-	return &SynonymDumpCmd{
-		Cmd: NewCmd(ctx, args...),
-	}
-}
-
-func (c *SynonymDumpCmd) postProcess() error {
-	if result, err := c.Slice(); err == nil {
-		synonymMap := make(map[string][]string)
-		for n := 0; n < len(result); n += 2 {
-			synonym := result[n].(string)
-			groups := make([]string, len(result[n+1].([]interface{})))
-			for m, group := range result[n+1].([]interface{}) {
-				groups[m] = group.(string)
-			}
-			synonymMap[synonym] = groups
-
-		}
-		c.SetVal(synonymMap)
-	}
-	return nil
-}
-
-func (cmd *SynonymDumpCmd) SetVal(val map[string][]string) {
-	cmd.val = val
-}
-
-func (cmd *SynonymDumpCmd) Val() map[string][]string {
-	return cmd.val
-}
-
-func (cmd *SynonymDumpCmd) Result() (map[string][]string, error) {
-	return cmd.Val(), cmd.Err()
-}
-
-/*******************************************************************************
-*
-* InfoCmd
-*
-*******************************************************************************/
-
-/*******************************************************************************
-*
-* IntSlicePointerCmd
-* used to represent a RedisJSON response where the result is either an integer or nil
-*
-*******************************************************************************/
-
-type IntSlicePointerCmd struct {
-	*SliceCmd
-	val []*int64
-}
-
-// NewIntSlicePointerCmd initialises an IntSlicePointerCmd
-func NewIntSlicePointerCmd(ctx context.Context, args ...interface{}) *IntSlicePointerCmd {
-	return &IntSlicePointerCmd{
-		SliceCmd: NewSliceCmd(ctx, args...),
-	}
-}
-
-// postProcess converts an array of bulk string responses into
-// an array of arrays of interfaces.
-// an array of json.RawMessage objects
-func (c *IntSlicePointerCmd) postProcess() error {
-
-	if len(c.SliceCmd.Val()) == 0 {
-		c.val = nil
-		c.SetErr(nil)
+		return append([]interface{}{"return", len(fields)}, fields...)
+	} else {
 		return nil
 	}
+}
 
-	results := []*int64{}
+// serialize the filters
+func (q *QueryOptions) serializeFilters() []interface{} {
+	args := []interface{}{}
+	for _, f := range q.Filters {
+		args = append(args, f.serialize()...)
+	}
+	return args
+}
 
-	for _, val := range c.SliceCmd.Val() {
-		var result int64
-		if val == nil {
-			results = append(results, nil)
-		} else {
-			result = val.(int64)
-			results = append(results, &result)
+// serialize prepares the summarisation to be passed to Redis.
+func (s *QuerySummarize) serialize() []interface{} {
+	args := []interface{}{"SUMMARIZE"}
+	args = append(args, serializeCountedArgs("fields", false, s.Fields)...)
+	args = append(args, "frags", s.Frags)
+	args = append(args, "len", s.Len)
+	args = append(args, "separator", s.Separator)
+	return args
+}
+
+// serialize prepares the highlighting to be passed to Redis.
+func (h *QueryHighlight) serialize() []interface{} {
+	args := []interface{}{"HIGHLIGHT"}
+	args = append(args, serializeCountedArgs("fields", false, h.Fields)...)
+	if h.OpenTag != "" || h.CloseTag != "" {
+		args = append(args, "tags", h.OpenTag, h.CloseTag)
+	}
+	return args
+}
+
+// Serialize the limit for output in an FT.SEARCH
+func (ql *QueryLimit) serialize() []interface{} {
+	if ql.Offset == DefaultOffset && ql.Num == DefaultLimit {
+		return nil
+	} else {
+		return []interface{}{"limit", ql.Offset, ql.Num}
+	}
+}
+
+/******************************************************************************
+* Geofilters
+******************************************************************************/
+
+// GeoFilter represents a location and radius to be used in a search query
+type GeoFilter struct {
+	Attribute         string
+	Long, Lat, Radius float64
+	Units             string
+}
+
+func (gf *GeoFilter) serialize() []interface{} {
+	return []interface{}{"geofilter", gf.Attribute, gf.Long, gf.Lat, gf.Radius, gf.Units}
+}
+
+//------------------------------------------------------------------------------on
+
+// serializeCountedArgs is used to serialize a string array to
+// NAME <count> values. If incZero is true then NAME 0 will be generated
+// otherwise empty results will not be generated.
+func serializeCountedArgs(name string, incZero bool, args []string) []interface{} {
+	if len(args) > 0 || incZero {
+		result := make([]interface{}, 2+len(args))
+
+		result[0] = name
+		result[1] = len(args)
+		for pos, val := range args {
+			result[pos+2] = val
 		}
-	}
 
-	c.SetVal(results)
-	return nil
-}
-
-func (cmd *IntSlicePointerCmd) SetVal(val []*int64) {
-	cmd.val = val
-}
-
-func (cmd *IntSlicePointerCmd) Val() []*int64 {
-	return cmd.val
-}
-
-func (cmd *IntSlicePointerCmd) Result() ([]*int64, error) {
-	return cmd.Val(), cmd.Err()
-}
-
-/*******************************************************************************
-*
-* AggregateCmd
-* used to manage the results from FT.AGGREGATE calls
-*
-*******************************************************************************/
-
-type AggregateCmd struct {
-	*SliceCmd
-	val []map[string]string
-}
-
-func NewAggregateCmd(ctx context.Context, args ...interface{}) *AggregateCmd {
-	return &AggregateCmd{
-		SliceCmd: NewSliceCmd(ctx, args...),
-	}
-}
-
-func (c *AggregateCmd) postProcess() error {
-	if len(c.SliceCmd.Val()) == 0 {
-		c.val = nil
-		c.SetErr(nil)
+		return result
+	} else {
 		return nil
 	}
-
-	results := make([]map[string]string, len(c.SliceCmd.Val())-1)
-
-	for n, entry := range c.SliceCmd.Val() {
-
-		if n > 0 {
-			row := entry.([]interface{})
-			asStrings := map[string]string{}
-			for m := 0; m < len(row); m += 2 {
-				asStrings[row[m].(string)] = row[m+1].(string)
-			}
-			results[n-1] = asStrings
-		}
-	}
-
-	c.SetVal(results)
-	return nil
-}
-
-func (cmd *AggregateCmd) SetVal(val []map[string]string) {
-	cmd.val = val
-}
-
-func (cmd *AggregateCmd) Val() []map[string]string {
-	return cmd.val
-}
-
-func (cmd *AggregateCmd) Result() ([]map[string]string, error) {
-	return cmd.Val(), cmd.Err()
 }
